@@ -1,6 +1,6 @@
 # Sonido estéreo y ficheros WAVE
 
-## Nom i cognoms
+## Nom i cognoms: FRANCESC VALERO RUIZ
 
 ## El formato WAVE
 
@@ -185,14 +185,139 @@ innecesariamente la canción.
 Inserte a continuación el código de los métodos desarrollados en esta tarea, usando los comandos necesarios
 para que se realice el realce sintáctico en Python del mismo (no vale insertar una imagen o una captura de
 pantalla, debe hacerse en formato *markdown*).
+#### Código para abrir y crear WAVE
+```python
+import wave
+
+
+def abrir_wave(fichero):
+    with wave.open(fichero, 'rb') as archivo_wave:
+        parametros = archivo_wave.getparams()
+        muestras = archivo_wave.readframes(parametros.nframes)
+        return parametros, muestras
+
+
+def crear_cabecera_wave(sample_rate, num_canales, bits_per_sample, data_size):
+    cabecera = wave.open('temp.wav', 'wb')
+    cabecera.setnchannels(num_canales)
+    cabecera.setsampwidth(bits_per_sample // 8)
+    cabecera.setframerate(sample_rate)
+    cabecera.setnframes(data_size // (num_canales * (bits_per_sample // 8)))
+    cabecera.setcomptype('NONE', 'not compressed')
+    return cabecera
+
+```
 
 ##### Código de `estereo2mono()`
+```python
+def estereo2mono(fichero_entrada, fichero_salida, canal=2):
+     
+    parametros, muestras = abrir_wave(fichero_entrada)
+    num_canales = parametros.nchannels
+    muestras_mono = []
+
+    if num_canales == 2:
+        for i in range(0, len(muestras), 4):
+            muestra = muestras[i:i+4]
+            if canal == 0:
+                muestras_mono.append(muestra[0:2])
+            elif canal == 1:
+                muestras_mono.append(muestra[2:4])
+            elif canal == 2:
+                semisuma = ((muestra[0] + muestra[2]) // 2).to_bytes(2, 'little', signed=True)
+                muestras_mono.append(semisuma)
+            elif canal == 3:
+                semidiferencia = ((muestra[0] - muestra[2]) // 2).to_bytes(2, 'little', signed=True)
+                muestras_mono.append(semidiferencia)
+
+    cabecera_mono = crear_cabecera_wave(parametros.framerate, 1, parametros.sampwidth * 8, len(muestras_mono))
+    with wave.open(fichero_salida, 'wb') as archivo_salida:
+        archivo_salida.setparams(cabecera_mono.getparams())
+        archivo_salida.writeframes(b''.join(muestras_mono))
+```
 
 ##### Código de `mono2estereo()`
+```python
+def mono2estereo(fichero_entrada, fichero_salida):
+
+    parametros, muestras = abrir_wave(fichero_entrada)
+
+    muestras_estereo = []
+    for i in range(0, len(muestras), 2):
+        muestra = muestras[i:i+2]
+        muestras_estereo.extend(muestra * 2)
+
+    cabecera_estereo = crear_cabecera_wave(parametros.framerate, 2, parametros.sampwidth * 8, len(muestras_estereo))
+    with wave.open(fichero_salida, 'wb') as archivo_salida:
+        archivo_salida.setparams(cabecera_estereo.getparams())
+        archivo_salida.writeframes(b''.join(muestras_estereo))
+
+
+```
 
 ##### Código de `codEstereo()`
+```python
+def codEstereo(ficEste, ficCod):
+    """
+    Lee el fichero ficEste, que contiene una señal estéreo codificada con
+    PCM lineal de 16 bits, y construye con ellas una señal codificada con 32 bits
+    que permita su reproducción tanto por sistemas 
+    monofónicos como por sistemas estéreo preparados para ello.
+
+    """
+    (numChannels, sampleRate,  bitsXsample, data) = abreWave(ficEste)
+    
+    data32 = []
+    
+    for i in range(0, len(data), 2):         
+        dataLeft = data[i]                         
+        dataRight = data[i + 1]                    
+        dataSsuma = (dataLeft + dataRight) // 2    
+        dataSresta = (dataLeft - dataRight) // 2  
+        data32.append(dataSsuma)
+        data32.append(dataSresta)
+    
+    creaWave(ficCod, numChannels=1, sampleRate=sampleRate, bitXsample=32, data=data32)
+
+```
+##### Código de `codEstereo()`
+```python
+def codEstereo(fichero_entrada, fichero_salida):
+
+    parametros, muestras = abrir_wave(fichero_entrada)
+
+    muestras_codificadas = []
+    for i in range(0, len(muestras), 2):
+        muestra = muestras[i:i+2]
+        muestra_codificada = (muestra[0] ^ muestra[1]).to_bytes(2, 'little')
+        muestras_codificadas.append(muestra_codificada)
+
+    cabecera_codificada = crear_cabecera_wave(parametros.framerate, parametros.nchannels, parametros.sampwidth * 8, len(muestras_codificadas))
+    with wave.open(fichero_salida, 'wb') as archivo_salida:
+        archivo_salida.setparams(cabecera_codificada.getparams())
+        archivo_salida.writeframes(b''.join(muestras_codificadas))
+```
+
 
 ##### Código de `decEstereo()`
+```python
+def decEstereo(fichero_entrada, fichero_salida):
+
+    parametros, muestras = abrir_wave(fichero_entrada)
+
+    muestras_decodificadas = []
+    for i in range(0, len(muestras), 2):
+        muestra = muestras[i:i+2]
+        muestra_decodificada = (muestra[0] ^ muestra[1]).to_bytes(2, 'little')
+        muestras_decodificadas.append(muestra_decodificada)
+
+    cabecera_decodificada = crear_cabecera_wave(parametros.framerate, parametros.nchannels, parametros.sampwidth * 8, len(muestras_decodificadas))
+    with wave.open(fichero_salida, 'wb') as archivo_salida:
+        archivo_salida.setparams(cabecera_decodificada.getparams())
+        archivo_salida.writeframes(b''.join(muestras_decodificadas))
+  
+```
+
 
 #### Subida del resultado al repositorio GitHub y *pull-request*
 
